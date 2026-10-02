@@ -1,0 +1,28 @@
+name: Pull contributor
+on:
+  schedule: [{ cron: '17 * * * *' }]
+  workflow_dispatch: {}
+permissions: { contents: write }
+concurrency: { group: pull-contributor, cancel-in-progress: false }
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+      - env: { URL: '${{ secrets.UPSTREAM_URL }}' }
+        run: |
+          git fetch --no-tags --no-recurse-submodules "$URL" release
+          # refuse any change they make to .github/
+          BASE=$(git merge-base HEAD FETCH_HEAD) \
+            || BASE=$(git mktree </dev/null)
+          CHANGED=$(git diff --name-only \
+            "$BASE" FETCH_HEAD -- .github)
+          if [ -n "$CHANGED" ]; then
+            echo "refusing .github/ changes:"; echo "$CHANGED"; exit 1
+          fi
+          git push origin \
+            FETCH_HEAD:refs/heads/contributor
